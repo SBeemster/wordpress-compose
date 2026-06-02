@@ -61,6 +61,18 @@ services:
             $$_SERVER['HTTPS'] = 'on';
         }
 
+        // ── Restore real client IP (Cloudflare Tunnel) ─────────────────────
+        // CF-Connecting-IP always contains the genuine visitor IP. Trusting it
+        // is safe here because no host ports are published — every request
+        // arrives via cloudflared, so the header cannot be spoofed.
+        // This ensures WooCommerce logs correct customer IPs, geolocation/tax
+        // works, and any IP passed to Stripe Radar as a server-side signal is
+        // accurate (Radar's primary signals are still collected client-side by
+        // Stripe.js directly from the browser, unaffected by the tunnel).
+        if ( ! empty( $$_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
+            $$_SERVER['REMOTE_ADDR'] = $$_SERVER['HTTP_CF_CONNECTING_IP'];
+        }
+
         // ── Redis object cache ─────────────────────────────────────────────
         define('WP_REDIS_HOST', 'redis');
         define('WP_REDIS_PORT', 6379);

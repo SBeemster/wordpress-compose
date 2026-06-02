@@ -161,6 +161,74 @@ docker compose exec redis redis-cli info keyspace
 
 ---
 
+## Step 7 — WooCommerce shop + Stripe payments
+
+### Install WooCommerce
+
+1. In the WordPress admin, go to **Plugins → Add New** and search for **WooCommerce**.
+2. Install and **Activate** it. WooCommerce will run a setup wizard and auto-create
+   the Shop, Cart, Checkout, and My Account pages.
+3. Go to **Settings → Permalinks**, choose anything other than "Plain" (e.g. **Post
+   name**), and click **Save Changes**. WooCommerce requires non-plain permalinks for
+   product/checkout URLs to work.
+4. Go to **WooCommerce → Status** and confirm there are no PHP requirement warnings.
+   (All required extensions — `bcmath`, `exif`, `gd`, `intl`, `mysqli`, `zip`,
+   `imagick` — ship with this image.)
+
+### Install the Stripe payment gateway
+
+1. Go to **Plugins → Add New**, search for **WooCommerce Stripe Payment Gateway**
+   (by WooCommerce), install, and activate it.
+2. Go to **WooCommerce → Settings → Payments → Stripe** and enter your keys.
+   Use **test keys** first (publishable key + secret key from the Stripe Dashboard
+   → Developers → API keys → Test mode).
+3. The plugin shows a **webhook endpoint URL** (something like
+   `https://your-domain.example/?wc-api=wc_stripe`). Copy it.
+4. In the **Stripe Dashboard → Developers → Webhooks**, click **Add endpoint**,
+   paste that URL, and select the events the plugin lists (or choose all events).
+5. Copy the **Signing secret** Stripe generates and paste it back into the plugin's
+   Webhook Secret field. Save.
+6. Place a test order using Stripe's test card **4242 4242 4242 4242** (any future
+   expiry, any CVC). The order should complete and you should see the confirmation
+   email land in Mailpit.
+7. When ready for real payments, swap the test keys for your live keys and register
+   a second webhook endpoint pointing at the same URL in live mode.
+
+> **HTTPS / Stripe compatibility**: Cloudflare terminates TLS and the HTTPS shim in
+> `WORDPRESS_CONFIG_EXTRA` makes `is_ssl()` return `true`, which the Stripe gateway
+> requires. Webhooks (`POST` callbacks from Stripe) arrive through the existing
+> Cloudflare Tunnel without any additional routing changes.
+
+> **Fraud signals**: Stripe Radar's primary signals (device fingerprint, IP, browser
+> behaviour) are collected **client-side** by Stripe.js directly in the customer's
+> browser — these reach Stripe regardless of the tunnel. The `CF-Connecting-IP`
+> shim in `wp-config.php` additionally ensures the server-side customer IP recorded
+> on each order (and passed as a Radar signal by the plugin) is the genuine visitor
+> IP, not the `cloudflared` container's internal IP.
+
+### Optional: real cron for WooCommerce
+
+WooCommerce's Action Scheduler (scheduled emails, order processing) normally
+piggybacks on WP-Cron, which only fires when someone visits the site. For reliable
+background tasks on a low-traffic shop, disable WP-Cron's page-triggered mode and
+run it on a real system cron:
+
+```bash
+# Add to crontab on the VPS (runs every 5 minutes):
+*/5 * * * * docker compose -f /path/to/wp-docker/docker-compose.yml \
+  exec -T wordpress php /var/www/html/wp-cron.php
+```
+
+And add to `WORDPRESS_CONFIG_EXTRA` in `docker-compose.yml`:
+
+```php
+define('DISABLE_WP_CRON', true);
+```
+
+This is optional for first launch but recommended before going live.
+
+---
+
 ## Day-to-day operations
 
 ### View logs
