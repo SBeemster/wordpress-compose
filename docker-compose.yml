@@ -64,12 +64,46 @@ services:
         // ── Redis object cache ─────────────────────────────────────────────
         define('WP_REDIS_HOST', 'redis');
         define('WP_REDIS_PORT', 6379);
+      # ── Mail relay (msmtp) ──────────────────────────────────────────────
+      # Dev: leave these unset (or keep mailpit defaults) — mail goes to Mailpit.
+      # Prod: set SMTP_HOST/PORT/USER/PASS/AUTH=on/TLS=on in .env to use a real
+      # provider. No image rebuild needed — the entrypoint re-renders msmtprc.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_AUTH: ${SMTP_AUTH:-off}
+      SMTP_TLS:  ${SMTP_TLS:-off}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-wordpress@localhost}
     volumes:
       - wp_data:/var/www/html
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     networks:
       - wpnet
     # No ports: — all inbound traffic comes through the Cloudflare Tunnel.
+
+  # ── Mailpit (email testing) ──────────────────────────────────────────────────
+  # Catches all outgoing mail from WordPress/WooCommerce during development.
+  # SMTP endpoint:  mailpit:1025  (used by msmtp inside the wordpress container)
+  # Web UI:         mailpit:8025  (expose via Cloudflare Tunnel + Access policy)
+  #
+  # To switch to a real mail provider: set SMTP_HOST/PORT/USER/PASS/AUTH/TLS in
+  # .env and run `docker compose up -d` — msmtp reconfigures itself on restart.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    networks:
+      - wpnet
+    volumes:
+      - mailpit_data:/data
+    environment:
+      MP_DATABASE:               /data/mailpit.db
+      MP_MAX_MESSAGES:           500
+      MP_SMTP_AUTH_ACCEPT_ANY:   1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    # No ports: — reach the web UI via the Cloudflare Tunnel.
+    # Add a public hostname  mail.your-domain.example → http://mailpit:8025
+    # and protect it with a Cloudflare Access policy.
 
   # ── phpMyAdmin ───────────────────────────────────────────────────────────────
   phpmyadmin:
@@ -123,6 +157,7 @@ volumes:
   db_data:
   wp_data:
   db_backups:
+  mailpit_data:
 
 # ── Networks ──────────────────────────────────────────────────────────────────
 networks:

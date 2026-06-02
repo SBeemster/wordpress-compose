@@ -7,9 +7,10 @@ ports). TLS is terminated at Cloudflare's edge; the stack speaks plain HTTP inte
 
 | Service        | Role |
 |----------------|------|
-| `wordpress`    | PHP 8.3 / Apache, with `phpredis` extension |
+| `wordpress`    | PHP 8.3 / Apache, with `phpredis` + `msmtp` mail relay |
 | `db`           | MariaDB 11 |
 | `redis`        | Object cache (Redis 7) |
+| `mailpit`      | Local email testing (SMTP on :1025, web UI on :8025) |
 | `phpmyadmin`   | Database admin UI |
 | `cloudflared`  | Cloudflare Tunnel client — the only outbound connection to the internet |
 | `backup`       | Nightly `mysqldump` with 14-day rotation |
@@ -39,10 +40,11 @@ Under your new tunnel's **Public Hostname** tab, add:
 |-----------------------------|--------------|-------------------|
 | `your-domain.example`       | HTTP         | `wordpress:80`    |
 | `pma.your-domain.example`   | HTTP         | `phpmyadmin:80`   |
+| `mail.your-domain.example`  | HTTP         | `mailpit:8025`    |
 
-> **Tip:** Protect the phpMyAdmin hostname with a **Cloudflare Access** policy
-> (Zero Trust → Access → Applications → Add an application → Self-hosted) so it is
-> not publicly reachable.
+> **Tip:** Protect both `pma.` and `mail.` hostnames with **Cloudflare Access**
+> policies (Zero Trust → Access → Applications → Add an application → Self-hosted)
+> so they are not publicly reachable.
 
 ---
 
@@ -88,7 +90,61 @@ Complete the install (site title, admin user, password).
 
 ---
 
-## Step 5 — Enable Redis object cache
+## Step 5 — Email testing with Mailpit
+
+All mail sent by WordPress (WooCommerce order notifications, password resets,
+etc.) is routed through **msmtp** inside the container to the `mailpit` service.
+Nothing leaves your server during development.
+
+### View the inbox
+
+Browse to `https://mail.your-domain.example` (the Cloudflare Tunnel route you
+added in Step 1). You will be challenged by Cloudflare Access before seeing the
+inbox.
+
+### Send a test email
+
+The quickest way to generate a mail is to trigger a lost-password request on the
+WordPress login screen. The email will appear in Mailpit within seconds.
+
+You can also fire one from the CLI:
+
+```bash
+docker compose exec wordpress php -r '
+  require "/var/www/html/wp-load.php";
+  wp_mail("test@example.com", "Test from WordPress", "Hello from msmtp + Mailpit");
+  echo "done\n";
+'
+```
+
+### Verify msmtp is configured correctly
+
+```bash
+docker compose exec wordpress cat /etc/msmtprc
+# Should show: host mailpit, port 1025, auth off, tls off
+```
+
+### Switch to a real mail provider
+
+Edit `.env`, uncomment/fill in the production block, and restart:
+
+```bash
+# In .env:
+SMTP_HOST=smtp.yourprovider.com
+SMTP_PORT=587
+SMTP_AUTH=on
+SMTP_TLS=on
+SMTP_USER=your-smtp-username
+SMTP_PASS=your-smtp-password
+SMTP_FROM=noreply@your-domain.example
+
+docker compose up -d
+# The container re-renders /etc/msmtprc on startup — no image rebuild needed.
+```
+
+---
+
+## Step 6 — Enable Redis object cache
 
 1. In the WordPress admin, go to **Plugins → Add New** and search for
    **Redis Object Cache** (by Till Krüss).
@@ -168,11 +224,13 @@ docker compose run --rm backup cat /backup/wordpress_YYYY-MM-DD.sql.gz \
 
 ```
 .
-├── docker-compose.yml   # Service definitions
-├── Dockerfile           # Extends wordpress:php8.3-apache with phpredis
-├── uploads.ini          # PHP upload / memory limits
-├── .env                 # Secrets (not committed)
-├── .env.example         # Template committed to version control
+├── docker-compose.yml          # Service definitions
+├── Dockerfile                  # Extends wordpress:php8.3-apache with phpredis + msmtp
+├── docker-entrypoint-mail.sh   # Renders /etc/msmtprc from env, then calls stock entrypoint
+├── msmtp-sendmail.ini          # PHP conf.d: sendmail_path → msmtp
+├── uploads.ini                 # PHP upload / memory limits
+├── .env                        # Secrets (not committed)
+├── .env.example                # Template committed to version control
 ├── .gitignore
 └── README.md
 ```
