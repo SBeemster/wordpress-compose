@@ -10,7 +10,7 @@ services:
       MYSQL_USER:          ${MYSQL_USER}
       MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
     volumes:
-      - db_data:/var/lib/mysql
+      - ./data/db:/var/lib/mysql
     networks:
       - wpnet
     healthcheck:
@@ -88,7 +88,7 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-wordpress@localhost}
     volumes:
-      - wp_data:/var/www/html
+      - ./data/wordpress:/var/www/html
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     networks:
       - wpnet
@@ -107,7 +107,7 @@ services:
     networks:
       - wpnet
     volumes:
-      - mailpit_data:/data
+      - ./data/mailpit:/data
     environment:
       MP_DATABASE:               /data/mailpit.db
       MP_MAX_MESSAGES:           500
@@ -160,16 +160,9 @@ services:
       CRON_TIME:     0 3 * * *  # run at 03:00 UTC daily
       GZIP_LEVEL:    6
     volumes:
-      - db_backups:/backup
+      - ./backups:/backup
     networks:
       - wpnet
-
-# ── Volumes ───────────────────────────────────────────────────────────────────
-volumes:
-  db_data:
-  wp_data:
-  db_backups:
-  mailpit_data:
 
 # ── Networks ──────────────────────────────────────────────────────────────────
 networks:
