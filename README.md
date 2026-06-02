@@ -29,6 +29,7 @@ ports). TLS is terminated at Cloudflare's edge; the stack speaks plain HTTP inte
 - [ ] Add the 3 public hostname routes (wordpress / pma / mail) — [Add public hostnames](#add-public-hostnames-still-in-the-dashboard)
 - [ ] Protect `pma.` and `mail.` with Cloudflare Access policies — [Add public hostnames](#add-public-hostnames-still-in-the-dashboard)
 - [ ] `cp .env.example .env` — set `SITE_URL`, `TUNNEL_TOKEN`, all three passwords (keep `MYSQL_PASSWORD` == `WORDPRESS_DB_PASSWORD`), and `SMTP_FROM` — [Step 2](#step-2--configure-env)
+- [ ] Create the bind-mount directories with correct ownership — [Step 2](#step-2--configure-env)
 
 **Start + after first start**
 
@@ -97,6 +98,18 @@ Fill in at minimum:
 | `SMTP_FROM`             | Replace the example domain with your real domain |
 
 > **Note:** The shipped `.env.example` contains `change-me-*` placeholder passwords — they must be replaced before the first `docker compose up`. If `MYSQL_PASSWORD` and `WORDPRESS_DB_PASSWORD` differ, WordPress will fail to connect to the database.
+
+Then create the bind-mount directories. Two of them need specific ownership so the
+container processes (which run as non-root users) can write to them:
+
+```bash
+mkdir -p data/db data/wordpress data/mailpit backups
+sudo chown 999:999 data/db         # MariaDB runs as UID 999 (mysql)
+sudo chown  33:33  data/wordpress  # Apache runs as UID 33 (www-data)
+```
+
+`data/mailpit` and `backups` can stay owned by your current user — Mailpit and the
+backup containers handle their own initialization.
 
 ---
 
