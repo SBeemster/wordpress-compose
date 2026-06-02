@@ -1,0 +1,11 @@
+# Secrets — never commit the real .env
+.env
+
+# Local DB backup dumps if you ever bind-mount to the host
+backups/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

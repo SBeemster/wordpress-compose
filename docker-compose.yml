@@ -1,0 +1,130 @@
+services:
+
+  # ── MariaDB ──────────────────────────────────────────────────────────────────
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE:      ${MYSQL_DATABASE}
+      MYSQL_USER:          ${MYSQL_USER}
+      MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - wpnet
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Redis ─────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - wpnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ── WordPress ─────────────────────────────────────────────────────────────────
+  wordpress:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST:     db
+      WORDPRESS_DB_NAME:     ${WORDPRESS_DB_NAME}
+      WORDPRESS_DB_USER:     ${WORDPRESS_DB_USER}
+      WORDPRESS_DB_PASSWORD: ${WORDPRESS_DB_PASSWORD}
+      # Extra PHP constants injected into wp-config.php
+      WORDPRESS_CONFIG_EXTRA: |
+        // ── Site URL (set before WordPress loads) ──────────────────────────
+        define('WP_HOME',    '${SITE_URL}');
+        define('WP_SITEURL', '${SITE_URL}');
+
+        // ── Cloudflare Tunnel HTTPS shim ───────────────────────────────────
+        // Cloudflare terminates TLS and forwards plain HTTP; this tells PHP
+        // (and WordPress) the request was made over HTTPS so it generates
+        // correct https:// URLs and avoids redirect loops.
+        if ( isset( $$_SERVER['HTTP_X_FORWARDED_PROTO'] )
+             && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https' ) {
+            $$_SERVER['HTTPS'] = 'on';
+        }
+
+        // ── Redis object cache ─────────────────────────────────────────────
+        define('WP_REDIS_HOST', 'redis');
+        define('WP_REDIS_PORT', 6379);
+    volumes:
+      - wp_data:/var/www/html
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+    networks:
+      - wpnet
+    # No ports: — all inbound traffic comes through the Cloudflare Tunnel.
+
+  # ── phpMyAdmin ───────────────────────────────────────────────────────────────
+  phpmyadmin:
+    image: phpmyadmin:5
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PMA_HOST:     db
+      UPLOAD_LIMIT: 256M
+    networks:
+      - wpnet
+    # No ports: — access only via the Cloudflare Tunnel (use a separate
+    # public hostname rule + an Access policy to lock it down).
+
+  # ── Cloudflare Tunnel ─────────────────────────────────────────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on:
+      - wordpress
+    networks:
+      - wpnet
+
+  # ── Automated DB backups ──────────────────────────────────────────────────────
+  backup:
+    image: fradelg/mysql-cron-backup:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST:    db
+      MYSQL_USER:    ${MYSQL_USER}
+      MYSQL_PASS:    ${MYSQL_PASSWORD}
+      MYSQL_DB:      ${MYSQL_DATABASE}
+      MAX_BACKUPS:   14          # keep 14 daily dumps (~2 weeks)
+      CRON_TIME:     0 3 * * *  # run at 03:00 UTC daily
+      GZIP_LEVEL:    6
+    volumes:
+      - db_backups:/backup
+    networks:
+      - wpnet
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  db_data:
+  wp_data:
+  db_backups:
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  wpnet:
+    driver: bridge
