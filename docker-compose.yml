@@ -164,6 +164,24 @@ services:
     networks:
       - wpnet
 
+  # ── Automated WordPress files backups ─────────────────────────────────────────
+  # Nightly gzipped tarball of the ./data/wordpress bind mount (core, plugins,
+  # themes, uploads). Mirrors the `backup` service but for files instead of the DB.
+  # BACKUP_PRUNING_PREFIX ensures rotation only touches wordpress-files-* tarballs
+  # and never the *.sql.gz DB dumps that share the same ./backups directory.
+  files-backup:
+    image: offen/docker-volume-backup:latest
+    restart: unless-stopped
+    environment:
+      BACKUP_CRON_EXPRESSION: "0 3 * * *"                         # 03:00 UTC daily
+      BACKUP_FILENAME:        "wordpress-files-%Y-%m-%d_%H-%M-%S.tar.gz"
+      BACKUP_PRUNING_PREFIX:  "wordpress-files-"
+      BACKUP_RETENTION_DAYS:  "14"                                 # ~2 weeks
+      BACKUP_COMPRESSION:     "gz"
+    volumes:
+      - ./data/wordpress:/backup/wordpress:ro  # read-only — cannot corrupt WP files
+      - ./backups:/archive                     # same destination dir as DB dumps
+
 # ── Networks ──────────────────────────────────────────────────────────────────
 networks:
   wpnet:
