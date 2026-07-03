@@ -32,6 +32,7 @@ set -e
         echo "password ${SMTP_PASS}"
     fi
 } > /etc/msmtprc
-chmod 600 /etc/msmtprc
+chown root:www-data /etc/msmtprc
+chmod 640 /etc/msmtprc
 
 exec docker-entrypoint.sh "$@"
