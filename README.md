@@ -306,6 +306,27 @@ docker compose down -v       # ⚠ also deletes volumes — use only to start fr
 
 ---
 
+## Performance tuning
+
+### MariaDB buffer pool
+
+`db` sets `--innodb-buffer-pool-size=4G`, sized for the 32GB bare-metal host this
+stack targets. The buffer pool caches table/index data in RAM — under-sizing it
+is the first thing that causes slow checkouts and cart updates under concurrent
+load, well before CPU or PHP become the bottleneck.
+
+Adjust for your hardware (rule of thumb: ~50-70% of total RAM on a dedicated
+DB host, less if MariaDB shares the box with other services as it does here):
+
+```yaml
+# In docker-compose.yml, under the db service:
+command: --innodb-buffer-pool-size=2G   # e.g. for a 16GB host
+```
+
+Apply with `docker compose up -d db` — no rebuild needed.
+
+---
+
 ## Backups
 
 Two nightly jobs run at **03:00 UTC**, both writing to the `./backups` bind mount:

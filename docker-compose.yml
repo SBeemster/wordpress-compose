@@ -4,6 +4,9 @@ services:
   db:
     image: mariadb:11
     restart: unless-stopped
+    # 4G buffer pool sized for the 32GB bare-metal host this stack targets;
+    # lower it if running on smaller hardware.
+    command: --innodb-buffer-pool-size=4G
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE:      ${MYSQL_DATABASE}
