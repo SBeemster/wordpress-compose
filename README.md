@@ -325,6 +325,35 @@ command: --innodb-buffer-pool-size=2G   # e.g. for a 16GB host
 
 Apply with `docker compose up -d db` — no rebuild needed.
 
+### Cloudflare full page caching (free plan)
+
+Since Cloudflare Tunnel already sits in front of this stack, its edge cache can
+absorb almost all anonymous traffic (shop, product, category, blog pages) before
+it ever reaches the origin — no paid plan required, just Cache Rules (free plan
+includes up to 10).
+
+In the Cloudflare dashboard → your zone → **Caching → Cache Rules**, add these
+in order (order matters — rules are evaluated top-down and stop at first match):
+
+1. **Bypass dynamic/session paths** — Match: URI Path contains any of
+   `/wp-admin`, `/wp-login.php`, `/cart`, `/checkout`, `/my-account`,
+   `/wp-json`, `/wp-cron.php`, or Query String contains `wc-ajax=` or
+   `add-to-cart=` → Action: **Bypass cache**.
+2. **Bypass logged-in/cart cookies** — Match: Cookie contains
+   `wordpress_logged_in_` OR `woocommerce_items_in_cart` OR
+   `wp_woocommerce_session_` → Action: **Bypass cache**.
+3. **Cache everything else** — Match: Hostname equals your domain (catch-all)
+   → Action: **Cache eligible content**, Edge TTL ~2 hours (keep it short —
+   product prices/stock can change).
+
+Then install the free **Super Page Cache for Cloudflare** plugin (by Automattic)
+so publishing/updating a post, product, or stock level auto-purges the edge
+cache instead of waiting out the Edge TTL.
+
+This layers on top of the Redis object cache from Step 6 without conflict —
+Cloudflare only ever serves anonymous, cacheable pages; cart/checkout/account
+traffic always passes through to origin, where Redis still does its job.
+
 ---
 
 ## Backups
