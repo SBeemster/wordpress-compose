@@ -325,6 +325,27 @@ command: --innodb-buffer-pool-size=2G   # e.g. for a 16GB host
 
 Apply with `docker compose up -d db` — no rebuild needed.
 
+### Stability defaults
+
+A few small things are on by default in `docker-compose.yml` to keep the
+stack healthy under load rather than making it faster:
+
+- **Log rotation** — every service caps its Docker logs at 10MB × 3 files, so
+  a noisy container can't slowly fill the disk.
+- **Memory limits** — each service has a `deploy.resources.limits.memory` cap
+  so one runaway container (e.g. a bad plugin loop) can't starve the others on
+  the same box. `wordpress` (16G) and `db` (8G) are sized to support real peak
+  load on the 32GB reference host, not to throttle it — only the small,
+  fixed-purpose services (mailpit, phpMyAdmin, cloudflared, the backup jobs)
+  are capped tight, since any growth there is a bug, not legitimate traffic.
+  Lower all of them if running on smaller hardware.
+- **WordPress health check** — `wordpress` now has a health check
+  (`curl` against `http://localhost/`), and `cloudflared` waits for it to
+  pass before starting, instead of just waiting for the container to launch.
+- **Opcache tuning** (`opcache.ini`) — increases `max_accelerated_files` and
+  memory beyond the base image's generic defaults, since WP + WooCommerce +
+  plugins is a lot of PHP files to cache.
+
 ### Cloudflare full page caching (free plan)
 
 Since Cloudflare Tunnel already sits in front of this stack, its edge cache can
@@ -421,6 +442,7 @@ docker compose start wordpress
 ├── Dockerfile                  # Extends wordpress:php8.3-apache with phpredis + msmtp
 ├── docker-entrypoint-mail.sh   # Renders /etc/msmtprc from env, then calls stock entrypoint
 ├── msmtp-sendmail.ini          # PHP conf.d: sendmail_path → msmtp
+├── opcache.ini                 # PHP conf.d: opcache tuning
 ├── uploads.ini                 # PHP upload / memory limits
 ├── .env                        # Secrets (not committed)
 ├── .env.example                # Template committed to version control

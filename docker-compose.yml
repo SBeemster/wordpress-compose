@@ -1,3 +1,10 @@
+# Cap logs on every service so a noisy container can't fill the disk.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
 
   # ── MariaDB ──────────────────────────────────────────────────────────────────
@@ -16,6 +23,11 @@ services:
       - ./data/db:/var/lib/mysql
     networks:
       - wpnet
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 8G
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -29,6 +41,11 @@ services:
     restart: unless-stopped
     networks:
       - wpnet
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -95,6 +112,17 @@ services:
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     networks:
       - wpnet
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-o", "/dev/null", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     # No ports: — all inbound traffic comes through the Cloudflare Tunnel.
 
   # ── Mailpit (email testing) ──────────────────────────────────────────────────
@@ -116,6 +144,11 @@ services:
       MP_MAX_MESSAGES:           500
       MP_SMTP_AUTH_ACCEPT_ANY:   1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     # No ports: — reach the web UI via the Cloudflare Tunnel.
     # Add a public hostname  mail.your-domain.example → http://mailpit:8025
     # and protect it with a Cloudflare Access policy.
@@ -132,6 +165,11 @@ services:
       UPLOAD_LIMIT: 256M
     networks:
       - wpnet
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     # No ports: — access only via the Cloudflare Tunnel (use a separate
     # public hostname rule + an Access policy to lock it down).
 
@@ -143,9 +181,15 @@ services:
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     depends_on:
-      - wordpress
+      wordpress:
+        condition: service_healthy
     networks:
       - wpnet
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   # ── Automated DB backups ──────────────────────────────────────────────────────
   backup:
@@ -166,6 +210,11 @@ services:
       - ./backups:/backup
     networks:
       - wpnet
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # ── Automated WordPress files backups ─────────────────────────────────────────
   # Nightly gzipped tarball of the ./data/wordpress bind mount (core, plugins,
@@ -184,6 +233,11 @@ services:
     volumes:
       - ./data/wordpress:/backup/wordpress:ro  # read-only — cannot corrupt WP files
       - ./backups:/archive                     # same destination dir as DB dumps
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 # ── Networks ──────────────────────────────────────────────────────────────────
 networks:
