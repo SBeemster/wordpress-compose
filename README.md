@@ -104,8 +104,8 @@ container processes (which run as non-root users) can write to them:
 
 ```bash
 mkdir -p data/db data/wordpress data/mailpit backups
-sudo chown 999:999 data/db         # MariaDB runs as UID 999 (mysql)
-sudo chown  33:33  data/wordpress  # Apache runs as UID 33 (www-data)
+sudo chown -R 999:999 data/db         # MariaDB runs as UID 999 (mysql)
+sudo chown -R  33:33  data/wordpress  # Apache runs as UID 33 (www-data)
 ```
 
 `data/mailpit` and `backups` can stay owned by your current user — Mailpit and the
@@ -403,12 +403,19 @@ docker compose run --rm backup ls -lh /backup
 #### Restore the database from a dump
 
 ```bash
-docker compose run --rm backup cat /backup/wordpress_YYYY-MM-DD.sql.gz \
+cat ./backups/latest.wordpress.sql.gz \
   | gunzip \
-  | docker compose exec -T db mysql -u wordpress -p"${MYSQL_PASSWORD}" wordpress
+  | docker compose exec -T db mariadb -u wordpress -p"$MYSQL_PASSWORD" wordpress
 ```
 
 ### WordPress files backup
+
+Restore ownerships after performing backups!
+
+```bash
+sudo chown -R 999:999 data/db         # MariaDB runs as UID 999 (mysql)
+sudo chown -R  33:33  data/wordpress  # Apache runs as UID 33 (www-data)
+```
 
 #### Trigger a manual files backup
 
@@ -424,12 +431,11 @@ ls -lh backups/wordpress-files-*.tar.gz
 
 #### Restore WordPress files from a tarball
 
+Stop WordPress first to avoid writes during extraction.
+
 ```bash
-# Stop WordPress first to avoid writes during extraction
-docker compose stop wordpress
 tar -xzf backups/wordpress-files-YYYY-MM-DD_HH-MM-SS.tar.gz \
-  -C ./data --strip-components=2 backup/wordpress
-docker compose start wordpress
+  -C ./data --strip-components=1 /backup/wordpress
 ```
 
 ---
