@@ -123,6 +123,8 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     restart: unless-stopped
+    # Opt-in only: start with `docker compose --profile mailpit up -d`.
+    profiles: ["mailpit"]
     networks:
       - wpnet
     volumes:

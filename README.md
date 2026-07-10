@@ -140,6 +140,15 @@ All mail sent by WordPress (WooCommerce order notifications, password resets,
 etc.) is routed through **msmtp** inside the container to the `mailpit` service.
 Nothing leaves your server during development.
 
+> Mailpit is **opt-in** — a plain `docker compose up -d` does **not** start it.
+> Bring it up (and the rest of the stack) with the `mailpit` profile:
+>
+> ```bash
+> docker compose --profile mailpit up -d
+> ```
+>
+> With Mailpit off, set a real `SMTP_HOST` in `.env` or outgoing mail will fail.
+
 ### View the inbox
 
 Browse to `https://mail.your-domain.example` (the Cloudflare Tunnel route you
