@@ -311,6 +311,24 @@ docker compose down          # keeps volumes (data is safe)
 docker compose down -v       # ⚠ also deletes volumes — use only to start fresh
 ```
 
+### Rotate auth salts (log everyone out)
+
+WordPress generates random salts on first boot. To rotate them — e.g. after a
+suspected session-cookie leak — regenerate all eight, which invalidates every
+existing login:
+
+```bash
+docker run --rm -v ./data/wordpress:/var/www/html -u 33:33 \
+  wordpress:cli config shuffle-salts
+```
+
+This only rewrites `wp-config.php` (no DB access needed). No restart required.
+
+> `-u 33:33` is required: `wordpress:cli` is Alpine-based (`www-data` = UID 82),
+> but the files are owned by the Debian `wordpress` image's `www-data` (UID 33).
+> Passing `-u www-data` here resolves to the wrong user and fails with
+> *"wp-config.php is not writable."*
+
 ---
 
 ## Performance tuning
