@@ -11,7 +11,6 @@ ports). TLS is terminated at Cloudflare's edge; the stack speaks plain HTTP inte
 | `db`           | MariaDB 11 |
 | `redis`        | Object cache (Redis 7) |
 | `mailpit`      | Local email testing (SMTP on :1025, web UI on :8025) |
-| `phpmyadmin`   | Database admin UI |
 | `cloudflared`  | Cloudflare Tunnel client — the only outbound connection to the internet |
 | `backup`       | Nightly `mysqldump` with 14-day rotation |
 | `files-backup` | Nightly tarball of `./data/wordpress` with 14-day rotation |
@@ -26,8 +25,8 @@ ports). TLS is terminated at Cloudflare's edge; the stack speaks plain HTTP inte
 
 - [ ] Docker Engine ≥ 26 + Compose v2 installed on the VPS — [Prerequisites](#prerequisites)
 - [ ] Create the Cloudflare Tunnel and copy its token — [Step 1](#step-1--create-the-cloudflare-tunnel)
-- [ ] Add the 3 public hostname routes (wordpress / pma / mail) — [Add public hostnames](#add-public-hostnames-still-in-the-dashboard)
-- [ ] Protect `pma.` and `mail.` with Cloudflare Access policies — [Add public hostnames](#add-public-hostnames-still-in-the-dashboard)
+- [ ] Add the 2 public hostname routes (wordpress / mail) — [Add public hostnames](#add-public-hostnames-still-in-the-dashboard)
+- [ ] Protect `mail.` with a Cloudflare Access policy — [Add public hostnames](#add-public-hostnames-still-in-the-dashboard)
 - [ ] `cp .env.example .env` — set `SITE_URL`, `TUNNEL_TOKEN`, all three passwords (keep `MYSQL_PASSWORD` == `WORDPRESS_DB_PASSWORD`), and `SMTP_FROM` — [Step 2](#step-2--configure-env)
 - [ ] Create the bind-mount directories with correct ownership — [Step 2](#step-2--configure-env)
 
@@ -69,13 +68,12 @@ Under your new tunnel's **Public Hostname** tab, add:
 | Subdomain / Domain          | Service type | Service URL       |
 |-----------------------------|--------------|-------------------|
 | `your-domain.example`       | HTTP         | `wordpress:80`    |
-| `pma.your-domain.example`   | HTTP         | `phpmyadmin:80`   |
 | `mail.your-domain.example`  | HTTP         | `mailpit:8025`    |
 
-> **Required:** Protect both `pma.` and `mail.` hostnames with **Cloudflare Access**
-> policies (Zero Trust → Access → Applications → Add an application → Self-hosted).
-> phpMyAdmin and Mailpit have no authentication of their own — without Access policies
-> these admin interfaces are publicly reachable.
+> **Required:** Protect the `mail.` hostname with a **Cloudflare Access**
+> policy (Zero Trust → Access → Applications → Add an application → Self-hosted).
+> Mailpit has no authentication of its own — without an Access policy
+> this admin interface is publicly reachable.
 
 ---
 
@@ -336,7 +334,7 @@ stack healthy under load rather than making it faster:
   so one runaway container (e.g. a bad plugin loop) can't starve the others on
   the same box. `wordpress` (16G) and `db` (8G) are sized to support real peak
   load on the 32GB reference host, not to throttle it — only the small,
-  fixed-purpose services (mailpit, phpMyAdmin, cloudflared, the backup jobs)
+  fixed-purpose services (mailpit, cloudflared, the backup jobs)
   are capped tight, since any growth there is a bug, not legitimate traffic.
   Lower all of them if running on smaller hardware.
 - **WordPress health check** — `wordpress` now has a health check

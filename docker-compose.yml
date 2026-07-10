@@ -137,22 +137,6 @@ services:
     # Add a public hostname  mail.your-domain.example → http://mailpit:8025
     # and protect it with a Cloudflare Access policy.
 
-  # ── phpMyAdmin ───────────────────────────────────────────────────────────────
-  phpmyadmin:
-    image: phpmyadmin:5
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      PMA_HOST:     db
-      UPLOAD_LIMIT: 256M
-    networks:
-      - wpnet
-    logging: *default-logging
-    # No ports: — access only via the Cloudflare Tunnel (use a separate
-    # public hostname rule + an Access policy to lock it down).
-
   # ── Cloudflare Tunnel ─────────────────────────────────────────────────────────
   cloudflared:
     image: cloudflare/cloudflared:latest
